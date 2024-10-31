@@ -2,21 +2,33 @@ import streamlit as st
 import librosa
 import soundfile as sf
 import numpy as np
-from scipy.signal import butter, sosfilt
+from scipy.signal import butter, sosfilt, wiener
+import pywt
 from io import BytesIO
 
-# Function for band-pass filtering
-def band_pass_filter(audio, sr, lowcut=300, highcut=3000):
-    sos = butter(4, [lowcut, highcut], btype='band', fs=sr, output='sos')
+# Advanced band-pass filter with adjustable smoothness
+def advanced_band_pass_filter(audio, sr, lowcut=300, highcut=3000):
+    sos = butter(6, [lowcut, highcut], btype='band', fs=sr, output='sos')
     return sosfilt(sos, audio)
 
-# Function to denoise audio (placeholder for ML model)
-def denoise_audio(audio):
-    return audio * 0.8  # Reduces noise as a placeholder
+# Apply spectral gating to remove noise
+def spectral_gate(audio, sr, noise_reduction_factor=0.5):
+    stft = librosa.stft(audio)
+    magnitude, phase = np.abs(stft), np.angle(stft)
+    noise_magnitude = np.median(magnitude, axis=1, keepdims=True) * noise_reduction_factor
+    gated_magnitude = np.maximum(magnitude - noise_magnitude, 0)
+    return librosa.istft(gated_magnitude * np.exp(1j * phase))
+
+# Apply wavelet denoising
+def wavelet_denoise(audio, wavelet='db1', level=2):
+    coeffs = pywt.wavedec(audio, wavelet, level=level)
+    threshold = np.sqrt(2 * np.log(len(audio)))  # Universal threshold
+    denoised_coeffs = [pywt.threshold(c, threshold, mode='soft') for c in coeffs]
+    return pywt.waverec(denoised_coeffs, wavelet)
 
 # Streamlit app layout
-st.title("Audio Denoising App")
-st.write("Upload a noisy audio file to apply band-pass filtering and denoising.")
+st.title("Advanced Audio Denoising App")
+st.write("Upload a noisy audio file to apply advanced noise cancellation techniques.")
 
 # File uploader
 uploaded_file = st.file_uploader("Choose an audio file", type=["wav", "mp3"])
@@ -26,17 +38,20 @@ if uploaded_file is not None:
     noisy_audio, sr = librosa.load(uploaded_file, sr=None)
     st.audio(uploaded_file, format="audio/wav", start_time=0)
 
-    # Apply band-pass filter
-    filtered_audio = band_pass_filter(noisy_audio, sr)
+    # Apply advanced band-pass filter
+    filtered_audio = advanced_band_pass_filter(noisy_audio, sr)
     
-    # Denoise the audio (placeholder for ML model)
-    denoised_audio = denoise_audio(filtered_audio)
+    # Apply spectral gating
+    gated_audio = spectral_gate(filtered_audio, sr)
+    
+    # Apply wavelet denoising
+    denoised_audio = wavelet_denoise(gated_audio)
 
     # Display original and processed audio side-by-side
     st.subheader("Original Noisy Audio")
     st.audio(uploaded_file, format="audio/wav")
 
-    st.subheader("Denoised Audio")
+    st.subheader("Denoised Audio with Advanced Noise Cancellation")
     denoised_audio_bytes = BytesIO()
     sf.write(denoised_audio_bytes, denoised_audio, sr, format='WAV')
     st.audio(denoised_audio_bytes, format="audio/wav")
