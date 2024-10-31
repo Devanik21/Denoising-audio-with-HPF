@@ -6,7 +6,7 @@ from scipy.signal import butter, sosfilt
 from io import BytesIO
 
 # Function for band-pass filtering
-def band_pass_filter(audio, sr, lowcut=10, highcut=200):
+def band_pass_filter(audio, sr, lowcut=10, highcut=500):
     sos = butter(4, [lowcut, highcut], btype='band', fs=sr, output='sos')
     return sosfilt(sos, audio)
 
